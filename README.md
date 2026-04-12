@@ -103,11 +103,36 @@ npm run dev
 
 ### Nintendo
 
-1. 运行辅助脚本：`node scripts/get-nintendo-token.mjs`
-2. 按提示在浏览器中登录任天堂账号
-3. 右键复制「Select this account」按钮链接
-4. 粘贴回命令行获取 session_token
-5. session_token 有效期约 2 年
+获取 session_token 需要完成一次 OAuth 登录流程，按以下步骤操作：
+
+**第 1 步：生成登录链接**
+
+打开终端（PowerShell / CMD），粘贴以下命令并回车：
+
+```bash
+node -e "const c=require('crypto'),v=c.randomBytes(32).toString('base64url'),h=c.createHash('sha256').update(v).digest('base64url'),s=c.randomBytes(16).toString('hex');console.log('code_verifier: '+v+'\n');console.log('请用浏览器打开以下链接并登录：\n');console.log('https://accounts.nintendo.com/connect/1.0.0/authorize?state='+s+'&redirect_uri=npf5c38e31cd085304b%3A%2F%2Fauth&client_id=5c38e31cd085304b&scope=openid+user+user.mii+user.email+user.links%5B%5D.id&response_type=session_token_code&session_token_code_challenge='+h+'&session_token_code_challenge_method=S256&theme=login_form')"
+```
+
+终端会输出一个 `code_verifier` 值和一个登录链接，**请记下 code_verifier**。
+
+**第 2 步：浏览器登录**
+
+1. 复制终端输出的链接，在浏览器中打开
+2. 登录你的任天堂账号
+3. 登录成功后页面会显示「Select this account」按钮
+4. **右键点击**这个按钮 → 选择「复制链接地址」（不要左键点击）
+
+**第 3 步：换取 session_token**
+
+将下面命令中的 `你复制的链接` 和 `你的code_verifier` 替换为实际值，然后在终端运行：
+
+```bash
+node -e "const v='你的code_verifier',u='你复制的链接',c=u.match(/session_token_code=([^&]+)/)[1];fetch('https://accounts.nintendo.com/connect/1.0.0/api/session_token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':'com.nintendo.znej/1.13.0 (Android/7.1.2)'},body:'client_id=5c38e31cd085304b&session_token_code='+c+'&session_token_code_verifier='+v}).then(r=>r.json()).then(d=>console.log('\nsession_token:\n'+d.session_token))"
+```
+
+终端会输出 `session_token`（有效期约 2 年），将其粘贴到网站的「平台接入设置 → Nintendo → Session Token」中即可。
+
+> **提示**：第 1 步和第 3 步必须在同一次流程中完成，code_verifier 每次生成都不同。如果中途关闭了终端，需要从第 1 步重新开始。
 
 ## 项目结构
 
