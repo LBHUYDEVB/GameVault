@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Game {
+  id              String   @id @default(cuid())
+  title           String
+  platform        String   // steam | nintendo | playstation | other
+  steamAppId      String?  @unique
+  externalId      String?  // platform-specific ID for PSN/Nintendo
+  playtimeMinutes Int      @default(0)
+  userRating      Float?   // 0~10, step 0.5
+  reviewRichText  String?  // JSON string from Tiptap
+  coverUrl        String?
+  tags            String?  // comma-separated for simplicity in V1
+  status          String   @default("played") // played | playing | backlog | dropped
+  lastSyncedAt    DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([platform, externalId])
+  @@index([platform])
+  @@index([userRating])
+  @@index([playtimeMinutes])
+}
+
+model PlatformAccount {
+  id        String   @id @default(cuid())
+  platform  String   @unique // steam | nintendo | playstation
+  accountId String
+  apiKey    String?
+  syncStatus String  @default("idle") // idle | syncing | error
+  lastSyncAt DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SyncJob {
+  id         String   @id @default(cuid())
+  platform   String
+  status     String   @default("running") // running | success | failed
+  syncedCount Int     @default(0)
+  updatedCount Int    @default(0)
+  failedCount  Int    @default(0)
+  message    String?
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+}
