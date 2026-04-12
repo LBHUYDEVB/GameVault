@@ -45,8 +45,8 @@
 ### 安装
 
 ```bash
-git clone https://github.com/你的用户名/game-tracker.git
-cd game-tracker
+git clone https://github.com/LBHUYDEVB/GameVault.git
+cd GameVault
 npm install
 ```
 
