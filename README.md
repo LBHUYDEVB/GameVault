@@ -37,12 +37,26 @@
 
 ## 快速开始
 
-### 前置条件
+### 方式一：下载便携版（推荐）
+
+无需安装 Node.js，双击即用：
+
+1. 前往 [Releases](https://github.com/LBHUYDEVB/GameVault/releases) 下载 `GameVault-portable.zip`
+2. 解压到任意目录
+3. 双击 `GameVault.bat` 启动
+4. 浏览器会自动打开 `http://localhost:3947`
+5. 在网页「平台接入设置」中填写各平台凭证并同步
+
+数据存储在程序目录的 `GameVault-data/` 文件夹中，备份或迁移只需复制该文件夹。
+
+### 方式二：从源码运行
+
+#### 前置条件
 
 - Node.js 20+
 - npm
 
-### 安装
+#### 安装
 
 ```bash
 git clone https://github.com/LBHUYDEVB/GameVault.git
@@ -50,7 +64,7 @@ cd GameVault
 npm install
 ```
 
-### 配置
+#### 配置
 
 ```bash
 cp .env.example .env
@@ -58,14 +72,14 @@ cp .env.example .env
 
 根据需要在 `.env` 中填写 Steam API Key 等信息（也可以在网页设置页面填写）。
 
-### 初始化数据库
+#### 初始化数据库
 
 ```bash
 npx prisma generate
 npx prisma db push
 ```
 
-### 启动
+#### 启动
 
 ```bash
 npm run dev
