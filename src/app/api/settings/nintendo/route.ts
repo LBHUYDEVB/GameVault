@@ -1,25 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { maskedCredential, normalizeCredentialForSave } from "@/lib/integrations/credentials";
 
 export async function GET() {
   const account = await prisma.platformAccount.findUnique({ where: { platform: "nintendo" } });
   if (!account) {
-    return NextResponse.json({ sessionToken: "", syncStatus: "idle", lastSyncAt: null });
+    return NextResponse.json({ sessionToken: "", maskedCredential: "未配置", syncStatus: "idle", lastSyncAt: null });
   }
   return NextResponse.json({
-    sessionToken: account.apiKey ?? "",
+    sessionToken: account.apiKey ? "configured" : "",
+    maskedCredential: maskedCredential("nintendo", account),
     syncStatus: account.syncStatus,
     lastSyncAt: account.lastSyncAt,
   });
 }
 
 export async function PUT(req: NextRequest) {
-  const { sessionToken } = await req.json();
+  const body = await req.json();
+  const credential = normalizeCredentialForSave("nintendo", body);
 
   await prisma.platformAccount.upsert({
     where: { platform: "nintendo" },
-    update: { apiKey: sessionToken },
-    create: { platform: "nintendo", accountId: "me", apiKey: sessionToken },
+    update: {
+      accountId: credential.accountId,
+      apiKey: credential.apiKey,
+      credentialJson: credential.credentialJson,
+      credentialStatus: "unknown",
+      lastError: null,
+    },
+    create: { platform: "nintendo", ...credential },
   });
 
   return NextResponse.json({ ok: true });

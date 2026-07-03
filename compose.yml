@@ -1,0 +1,25 @@
+services:
+  gamevault:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gamevault:local
+    container_name: gamevault
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    ports:
+      - "${GAMEVAULT_BIND:-0.0.0.0}:${GAMEVAULT_PORT:-3000}:3000"
+    environment:
+      APP_USERNAME: "${APP_USERNAME:-gamevault}"
+      APP_PASSWORD: "${APP_PASSWORD:?Set APP_PASSWORD in .env.docker}"
+      DATABASE_PATH: /data/gamevault.db
+      DATABASE_URL: file:/data/gamevault.db
+      HTTPS_PROXY: "${HTTPS_PROXY:-}"
+      HTTP_PROXY: "${HTTP_PROXY:-}"
+      ALL_PROXY: "${ALL_PROXY:-}"
+      NO_PROXY: "localhost,127.0.0.1,gamevault"
+    volumes:
+      - ./data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

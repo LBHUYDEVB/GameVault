@@ -45,6 +45,67 @@ interface PlayHistoryResponse {
   lastUpdatedAt: string;
 }
 
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function stringField(value: Record<string, unknown>, names: string[]) {
+  for (const name of names) {
+    const field = value[name];
+    if (typeof field === "string" && field.trim()) return field;
+  }
+  return null;
+}
+
+function numberField(value: Record<string, unknown>, names: string[]) {
+  for (const name of names) {
+    const field = value[name];
+    if (typeof field === "number" && Number.isFinite(field)) return field;
+    if (typeof field === "string" && field.trim() && Number.isFinite(Number(field))) return Number(field);
+  }
+  return null;
+}
+
+function parseRecentNintendoPlaytime(recentPlayHistories: unknown[], titleId: string) {
+  const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  let minutes = 0;
+  let matched = false;
+  const seen = new Set<string>();
+
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+
+    const item = objectValue(value);
+    if (!item) return;
+
+    const itemTitleId = stringField(item, ["titleId", "gameTitleId", "applicationId", "programId"]);
+    const dateValue = stringField(item, ["playedAt", "playedDate", "date", "startTime", "lastPlayedAt"]);
+    const minuteValue = numberField(item, ["playedMinutes", "playMinutes", "minutes", "durationMinutes", "totalPlayedMinutes"]);
+
+    if (itemTitleId === titleId && dateValue && minuteValue != null) {
+      const timestamp = new Date(dateValue).getTime();
+      if (!Number.isNaN(timestamp) && timestamp >= twoWeeksAgo) {
+        const key = `${itemTitleId}:${dateValue}:${minuteValue}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          minutes += Math.max(0, Math.round(minuteValue));
+          matched = true;
+        }
+      }
+    }
+
+    for (const child of Object.values(item)) {
+      if (typeof child === "object" && child !== null) visit(child);
+    }
+  };
+
+  visit(recentPlayHistories);
+  return matched ? minutes : null;
+}
+
 export class NintendoClient implements IntegrationPort {
   readonly platform = "nintendo";
 
@@ -109,12 +170,17 @@ export class NintendoClient implements IntegrationPort {
 
     console.log(`[Nintendo] Got ${data.playHistories.length} games`);
 
-    return data.playHistories.map((g) => ({
-      externalId: g.titleId,
-      title: g.titleName,
-      playtimeMinutes: g.totalPlayedMinutes,
-      coverUrl: g.imageUrl,
-    }));
+    return data.playHistories.map((g) => {
+      const recentPlaytimeMinutes = parseRecentNintendoPlaytime(data.recentPlayHistories ?? [], g.titleId);
+      return {
+        externalId: g.titleId,
+        title: g.titleName,
+        playtimeMinutes: g.totalPlayedMinutes,
+        recentPlaytimeMinutes,
+        recentPlaytimeSource: recentPlaytimeMinutes == null ? null : "nintendo:recentPlayHistories",
+        coverUrl: g.imageUrl,
+      };
+    });
   }
 
   async healthcheck(): Promise<IntegrationStatus> {

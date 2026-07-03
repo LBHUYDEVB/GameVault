@@ -2,6 +2,8 @@ export interface ExternalGame {
   externalId: string;
   title: string;
   playtimeMinutes: number;
+  recentPlaytimeMinutes?: number | null;
+  recentPlaytimeSource?: string | null;
   coverUrl?: string;
 }
 

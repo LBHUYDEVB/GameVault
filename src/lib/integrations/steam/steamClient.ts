@@ -32,6 +32,7 @@ interface SteamOwnedGame {
   appid: number;
   name: string;
   playtime_forever: number;
+  playtime_2weeks?: number;
   img_icon_url?: string;
 }
 
@@ -72,6 +73,8 @@ export class SteamClient implements IntegrationPort {
       externalId: String(g.appid),
       title: g.name,
       playtimeMinutes: g.playtime_forever,
+      recentPlaytimeMinutes: Math.max(0, g.playtime_2weeks ?? 0),
+      recentPlaytimeSource: "steam:playtime_2weeks",
       coverUrl: `https://cdn.akamai.steamstatic.com/steam/apps/${g.appid}/header.jpg`,
     }));
   }

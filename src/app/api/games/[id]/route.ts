@@ -12,9 +12,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
 
-  const allowed: Record<string, unknown> = {};
+  const allowed: { userRating?: number | null; reviewRichText?: string | null; status?: string | null } = {};
   if (body.userRating !== undefined) allowed.userRating = body.userRating;
   if (body.reviewRichText !== undefined) allowed.reviewRichText = body.reviewRichText;
+  if (body.status !== undefined) allowed.status = body.status;
 
   const game = await updateGameReview(id, allowed);
   return NextResponse.json(game);
