@@ -1,148 +1,165 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import { GameCover } from "@/components/GameCover";
+import { GameListShelf, type ShelfList } from "@/components/GameListShelf";
+import { GameLogTimeline, type GameLogItem } from "@/components/GameLogTimeline";
 import { PlatformBadge } from "@/components/PlatformBadge";
-import { RatingDisplay } from "@/components/RatingDisplay";
+import { QuickRating } from "@/components/QuickRating";
+import { StatusQuickSwitch } from "@/components/StatusQuickSwitch";
+import { statusLabel } from "@/lib/gameStatus";
+import { listGameLists } from "@/lib/repositories/activityRepository";
+import { getGame } from "@/lib/repositories/gameRepository";
 import { minutesToHours } from "@/lib/utils";
 
-interface Game {
-  id: string;
-  title: string;
-  platform: string;
-  playtimeMinutes: number;
-  userRating: number | null;
-  reviewRichText: string | null;
-  coverUrl: string | null;
-  status: string;
-  tags: string | null;
-  lastSyncedAt: string | null;
-  updatedAt: string;
+function stripHtml(value: string | null | undefined) {
+  return value?.replace(/<[^>]*>/g, "").trim() ?? "";
 }
 
-export default function GameDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const [game, setGame] = useState<Game | null>(null);
-  const [loading, setLoading] = useState(true);
+function serializeLog(log: {
+  id: string;
+  playedAt: Date;
+  minutes: number;
+  note: string | null;
+  tags: string | null;
+}): GameLogItem {
+  return {
+    id: log.id,
+    playedAt: log.playedAt.toISOString(),
+    minutes: log.minutes,
+    note: log.note,
+    tags: log.tags,
+  };
+}
 
-  useEffect(() => {
-    fetch(`/api/games/${id}`)
-      .then((r) => r.json())
-      .then(setGame)
-      .finally(() => setLoading(false));
-  }, [id]);
+function serializeShelfList(list: Awaited<ReturnType<typeof listGameLists>>[number]): ShelfList {
+  return {
+    id: list.id,
+    title: list.title,
+    description: list.description,
+    ranked: list.ranked,
+    items: list.items.map((item) => ({
+      id: item.id,
+      gameId: item.gameId,
+      position: item.position,
+      note: item.note,
+      game: {
+        id: item.game.id,
+        title: item.game.title,
+        platform: item.game.platform,
+        coverUrl: item.game.coverUrl,
+        userRating: item.game.userRating,
+      },
+    })),
+  };
+}
 
-  if (loading) {
-    return (
-      <div className="p-8 flex items-center justify-center min-h-[50vh]">
-        <span className="font-mono text-text-muted animate-pulse">▓ LOADING... ▓</span>
-      </div>
-    );
-  }
+export default async function GameDetailPage(props: PageProps<"/games/[id]">) {
+  const { id } = await props.params;
+  const [game, lists] = await Promise.all([getGame(id), listGameLists()]);
+  if (!game) notFound();
 
-  if (!game) {
-    return (
-      <div className="p-8 text-center">
-        <p className="text-text-muted font-mono">游戏不存在</p>
-        <button onClick={() => router.back()} className="mt-4 text-neon-cyan font-mono text-sm hover:underline">
-          返回
-        </button>
-      </div>
-    );
-  }
-
-  const hasReview = !!game.reviewRichText && game.reviewRichText.replace(/<[^>]*>/g, "").trim().length > 0;
+  const reviewText = stripHtml(game.reviewRichText);
+  const hasReview = Boolean(reviewText);
+  const tags = game.tags?.split(",").map((tag) => tag.trim()).filter(Boolean) ?? [];
+  const serializedLogs = game.logs.map(serializeLog);
+  const shelfLists = lists.map(serializeShelfList);
+  const currentGame = [{
+    id: game.id,
+    title: game.title,
+    platform: game.platform,
+    coverUrl: game.coverUrl,
+    userRating: game.userRating,
+  }];
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-sm text-text-secondary font-mono mb-6">
-        <Link href="/dashboard" className="hover:text-neon-cyan transition-colors">DASHBOARD</Link>
-        <span className="text-text-muted">/</span>
-        <span className="text-foreground">{game.title}</span>
-      </div>
+    <div className="min-h-screen px-4 pt-20 md:px-8 md:pt-8">
+      <div className="mx-auto max-w-6xl space-y-10 pb-24">
+        <nav className="flex items-center gap-2 text-sm text-text-secondary">
+          <Link href="/dashboard" className="hover:text-neon-cyan">资料库</Link>
+          <span>/</span>
+          <span className="truncate text-foreground">{game.title}</span>
+        </nav>
 
-      {/* Hero */}
-      <div className="neon-card p-6 mb-6">
-        <div className="flex items-start gap-6">
-          {game.coverUrl && (
-            <img
-              src={game.coverUrl}
-              alt={game.title}
-              className="w-48 rounded-md border border-border object-cover"
-            />
-          )}
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold font-mono tracking-wide mb-3">{game.title}</h1>
-            <div className="flex flex-wrap items-center gap-4 mb-4">
-              <PlatformBadge platform={game.platform} />
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-text-secondary font-mono uppercase">时长</span>
-                <span className="font-mono font-bold text-neon-cyan">{minutesToHours(game.playtimeMinutes)}</span>
+        <section className="relative overflow-hidden rounded-2xl border border-border bg-[var(--bg-secondary)]">
+          <div className="absolute inset-0 opacity-25 blur-2xl">
+            <GameCover src={game.coverUrl} title={game.title} className="h-full w-full rounded-none border-0" priority />
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-black/40" />
+          <div className="relative grid gap-0 lg:grid-cols-[0.82fr_1.18fr]">
+            <div className="group p-5 md:p-8">
+              <GameCover src={game.coverUrl} title={game.title} className="h-[32rem] rounded-xl" priority />
+            </div>
+            <div className="flex flex-col justify-end p-6 md:p-10">
+              <div className="flex flex-wrap items-center gap-3">
+                <PlatformBadge platform={game.platform} />
+                <span className="rounded border border-border bg-black/30 px-2.5 py-1 text-xs text-text-secondary">{statusLabel(game.status)}</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-text-secondary font-mono uppercase">评分</span>
-                <RatingDisplay rating={game.userRating} />
+              <h1 className="mt-6 max-w-4xl text-4xl font-semibold leading-tight tracking-tight md:text-6xl">{game.title}</h1>
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <Fact label="时长" value={minutesToHours(game.playtimeMinutes)} />
+                <div className="rounded-lg border border-border bg-black/25 p-4">
+                  <p className="text-xs uppercase tracking-[0.2em] text-text-muted">评分</p>
+                  <div className="mt-3"><QuickRating gameId={game.id} initialRating={game.userRating} /></div>
+                </div>
+                <Fact label="日志" value={`${game.logs.length} 条`} />
+              </div>
+              <div className="mt-7">
+                <StatusQuickSwitch gameId={game.id} initialStatus={game.status} />
+              </div>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link href={`/admin/games/${game.id}`} className="rounded-md bg-neon-cyan px-5 py-3 text-sm font-semibold text-black">
+                  编辑记录
+                </Link>
+                <Link href="/dashboard#library" className="rounded-md border border-border bg-black/30 px-5 py-3 text-sm font-semibold text-foreground hover:border-neon-cyan hover:text-neon-cyan">
+                  返回资料库
+                </Link>
               </div>
             </div>
-
-            {game.tags && (
-              <div className="flex flex-wrap gap-1.5 mb-4">
-                {game.tags.split(",").map((tag) => (
-                  <span key={tag} className="px-2 py-0.5 rounded text-xs font-mono bg-white/5 border border-border text-text-secondary">
-                    {tag.trim()}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {game.lastSyncedAt && (
-              <p className="text-xs text-text-muted font-mono">
-                最近同步: {new Date(game.lastSyncedAt).toLocaleString("zh-CN")}
-              </p>
-            )}
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* Review Section */}
-      <div className="neon-card p-6">
-        <h2 className="text-sm font-mono uppercase tracking-widest text-text-secondary mb-4 flex items-center gap-2">
-          <span className="text-neon-magenta">▸</span> 详细评测
-        </h2>
-
-        {hasReview ? (
-          <div
-            className="prose prose-invert prose-sm max-w-none text-foreground/90 leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: game.reviewRichText! }}
-          />
-        ) : (
-          <div className="text-center py-8">
-            <p className="text-text-muted font-mono text-sm mb-3">░░ 暂无评测内容 ░░</p>
-            <Link
-              href={`/admin/games/${game.id}`}
-              className="inline-flex items-center px-4 py-2 rounded-md border border-neon-magenta/40 text-neon-magenta text-sm font-mono hover:bg-neon-magenta/10 transition-colors"
-            >
-              撰写评测
-            </Link>
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <span key={tag} className="rounded border border-border bg-black/15 px-3 py-1 text-xs text-text-secondary">{tag}</span>
+            ))}
           </div>
         )}
-      </div>
 
-      {/* Actions */}
-      <div className="flex justify-between mt-6">
-        <button onClick={() => router.back()} className="text-sm font-mono text-text-secondary hover:text-foreground transition-colors">
-          ← 返回
-        </button>
-        <Link
-          href={`/admin/games/${game.id}`}
-          className="inline-flex items-center px-4 py-2 rounded-md border border-neon-cyan/40 text-neon-cyan text-sm font-mono hover:bg-neon-cyan/10 transition-colors"
-        >
-          编辑
-        </Link>
+        <GameLogTimeline gameId={game.id} initialLogs={serializedLogs} />
+
+        <section className="rounded-xl border border-border bg-[var(--bg-card)] p-6 md:p-10">
+          <div className="mb-8 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-3xl font-semibold">私人评测</h2>
+              <p className="mt-2 text-sm text-text-secondary">写给以后自己的判断和回忆。</p>
+            </div>
+            {!hasReview && (
+              <Link href={`/admin/games/${game.id}`} className="hidden rounded-md border border-neon-cyan px-4 py-2 text-sm text-neon-cyan hover:bg-neon-cyan hover:text-black sm:inline-flex">
+                补写
+              </Link>
+            )}
+          </div>
+          {hasReview ? (
+            <div className="prose prose-invert max-w-none text-foreground/90" dangerouslySetInnerHTML={{ __html: game.reviewRichText! }} />
+          ) : (
+            <div className="rounded-lg border border-dashed border-border p-10 text-center text-text-secondary">
+              还没有评测。可以先写一段短评，再慢慢补成完整记录。
+            </div>
+          )}
+        </section>
+
+        <GameListShelf initialLists={shelfLists} games={currentGame} currentGameId={game.id} title="所属榜单" />
       </div>
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border bg-black/25 p-4">
+      <p className="text-xs uppercase tracking-[0.2em] text-text-muted">{label}</p>
+      <p className="mt-3 font-mono text-xl font-semibold">{value}</p>
     </div>
   );
 }

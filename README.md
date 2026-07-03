@@ -1,8 +1,6 @@
-# Game Tracker
+# GameVault
 
-一个本地运行的个人游戏记录网站，聚合 Steam / PlayStation / Nintendo 三个平台的游戏时长数据，支持评分和详细评测管理。
-
-采用 **复古未来主义（Retro-Futuristic）** 视觉风格。
+一个自托管的私人游戏资料库，聚合 Steam、PlayStation 和 Nintendo 的游戏与时长数据，支持评分、评测、游玩日志和私人榜单。
 
 ## 功能
 
@@ -10,34 +8,102 @@
   - Steam：官方 API 直连
   - PlayStation：通过 NPSSO token 获取游戏列表与时长（精确到秒）
   - Nintendo：通过 session_token 获取游戏列表与时长（精确到分钟）
-- **Dashboard 总览**
-  - 全平台游戏总时长、总数量统计
-  - 按评分 / 时长排序
-  - 模糊搜索游戏
-  - 时长分级配色（6 档，从灰色到发光洋红）
+- **私人资料库**
+  - 全平台游戏数量、评分、评测和同步状态
+  - 封面网格、表格、搜索、筛选和排序
+  - 近两周真实 API 时长与总时长
 - **游戏详情页**
   - 封面、平台、时长、评分
-  - 详细评测（富文本）
+  - 富文本评测、游玩日志和所属榜单
 - **后台管理**
-  - 图形化编辑评分（0~10，步进 0.5）
+  - 快捷评分（0~10，步进 0.5）
   - Tiptap 富文本编辑器撰写评测
   - 手动添加 / 删除游戏
-- **平台接入设置**
-  - 图形化填写各平台凭证
-  - 一键同步按钮
+- **同步中心**
+  - 平台凭证校验、单平台同步和全部同步
+  - 凭证只存储在服务器 SQLite 中，接口仅返回掩码状态
 
 ## 技术栈
 
 - **前端/服务**：Next.js 16 (App Router) + TypeScript
-- **样式**：Tailwind CSS（复古未来主义 design tokens）
+- **样式和动效**：Tailwind CSS + GSAP
 - **数据库**：SQLite（Prisma ORM）
 - **富文本**：Tiptap
 - **PlayStation API**：psn-api
 - **Nintendo API**：原生 HTTP（逆向工程接口）
 
-## 快速开始
+## Linux + Docker 部署
 
-### 方式一：下载便携版（推荐）
+这是服务器部署的推荐方式。项目按单用户、单容器、单 SQLite 数据库设计，不要启动多个应用副本共同写入数据库。
+
+### 1. 准备服务器
+
+安装 Git、Docker Engine 和 Docker Compose 插件，然后克隆源码：
+
+```bash
+git clone https://github.com/LBHUYDEVB/GameVault.git
+cd GameVault
+cp .env.docker.example .env.docker
+```
+
+编辑 `.env.docker`，至少替换 `APP_PASSWORD`。该文件不会被 Git 或 Docker 镜像收录。
+
+```env
+APP_USERNAME=gamevault
+APP_PASSWORD=使用一个足够长的随机密码
+GAMEVAULT_PORT=3000
+GAMEVAULT_BIND=0.0.0.0
+```
+
+### 2. 迁移已有数据
+
+数据库在容器外持久化到仓库下的 `data/gamevault.db`。第一次启动前可把当前项目的 `dev.db` 或便携版的 `GameVault-data/gamevault.db` 复制过去：
+
+```bash
+mkdir -p data
+cp /path/to/your/dev.db data/gamevault.db
+```
+
+复制数据库前先关闭旧版程序，避免复制到正在写入的 SQLite 文件。数据库中包含平台 Token，应将服务器账号和备份目录视为敏感数据。
+
+没有旧数据库时无需手动创建，容器会自动执行全部 Prisma migrations。
+
+### 3. 启动
+
+```bash
+docker compose --env-file .env.docker up -d --build
+docker compose --env-file .env.docker ps
+```
+
+访问 `http://服务器IP:3000`，浏览器会要求输入 `.env.docker` 中设置的账号和密码。
+
+容器启动时会自动执行 `prisma migrate deploy`。健康检查地址是 `/api/health`，只返回数据库是否可用，不返回业务数据。
+
+### 4. 更新
+
+```bash
+git pull
+docker compose --env-file .env.docker up -d --build
+```
+
+### 5. 备份
+
+为了得到一致的 SQLite 备份，先停止容器再复制：
+
+```bash
+docker compose --env-file .env.docker stop
+cp data/gamevault.db "data/gamevault-$(date +%Y%m%d-%H%M%S).db"
+docker compose --env-file .env.docker start
+```
+
+### 网络和安全
+
+- 仅在可信家庭局域网使用时，可以直接开放端口。
+- 需要远程访问时，推荐使用 Tailscale；若映射到公网，必须在前面增加 HTTPS 反向代理。
+- 内置的是 HTTP Basic Auth，在纯 HTTP 网络中不能替代 TLS。
+- 如果 API 需要宿主机代理，在 `.env.docker` 中使用 `http://host.docker.internal:端口`，不能使用容器内的 `127.0.0.1`。
+
+## Windows 便携版
 
 无需安装 Node.js，双击即用：
 
@@ -49,11 +115,11 @@
 
 数据存储在程序目录的 `GameVault-data/` 文件夹中，备份或迁移只需复制该文件夹。
 
-### 方式二：从源码运行
+## 从源码开发
 
 #### 前置条件
 
-- Node.js 20+
+- Node.js 22
 - npm
 
 #### 安装
@@ -61,7 +127,7 @@
 ```bash
 git clone https://github.com/LBHUYDEVB/GameVault.git
 cd GameVault
-npm install
+npm ci
 ```
 
 #### 配置
@@ -76,7 +142,7 @@ cp .env.example .env
 
 ```bash
 npx prisma generate
-npx prisma db push
+npx prisma migrate deploy
 ```
 
 #### 启动

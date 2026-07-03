@@ -4,7 +4,7 @@ import {
   exchangeRefreshTokenForAuthTokens,
   getUserPlayedGames,
 } from "psn-api";
-import type { AuthorizationPayload } from "psn-api";
+import type { AuthTokensResponse, AuthorizationPayload } from "psn-api";
 import { IntegrationPort, ExternalGame, IntegrationStatus } from "../types";
 
 function parsePTDuration(pt: string): number {
@@ -18,18 +18,29 @@ function parsePTDuration(pt: string): number {
 export class PlayStationClient implements IntegrationPort {
   readonly platform = "playstation";
 
-  private async authenticate(npsso: string): Promise<AuthorizationPayload> {
+  private async authenticate(npsso: string): Promise<AuthTokensResponse> {
     const accessCode = await exchangeNpssoForAccessCode(npsso);
     const auth = await exchangeAccessCodeForAuthTokens(accessCode);
     return auth;
   }
 
-  async fetchOwnedGames(accountId: string, npsso?: string): Promise<ExternalGame[]> {
-    if (!npsso) throw new Error("PlayStation NPSSO token is required");
+  private async authenticateWithCredential(credential: {
+    npsso?: string;
+    refreshToken?: string;
+  }): Promise<AuthTokensResponse> {
+    if (credential.refreshToken) {
+      try {
+        return await exchangeRefreshTokenForAuthTokens(credential.refreshToken);
+      } catch {
+        if (!credential.npsso) throw new Error("PlayStation refresh token 已失效，请重新授权 NPSSO。");
+      }
+    }
 
-    console.log("[PSN] Authenticating...");
-    const auth = await this.authenticate(npsso);
+    if (!credential.npsso) throw new Error("PlayStation NPSSO token is required");
+    return this.authenticate(credential.npsso);
+  }
 
+  private async fetchPlayedGames(auth: AuthorizationPayload): Promise<ExternalGame[]> {
     console.log("[PSN] Fetching played games...");
     const allGames: ExternalGame[] = [];
     let offset = 0;
@@ -59,6 +70,24 @@ export class PlayStationClient implements IntegrationPort {
 
     console.log(`[PSN] Got ${allGames.length} games`);
     return allGames;
+  }
+
+  async fetchOwnedGames(accountId: string, npsso?: string): Promise<ExternalGame[]> {
+    if (!npsso) throw new Error("PlayStation NPSSO token is required");
+
+    console.log("[PSN] Authenticating...");
+    const auth = await this.authenticate(npsso);
+    return this.fetchPlayedGames(auth);
+  }
+
+  async fetchOwnedGamesWithCredential(credential: {
+    npsso?: string;
+    refreshToken?: string;
+  }): Promise<{ games: ExternalGame[]; tokens: AuthTokensResponse }> {
+    console.log("[PSN] Authenticating...");
+    const tokens = await this.authenticateWithCredential(credential);
+    const games = await this.fetchPlayedGames(tokens);
+    return { games, tokens };
   }
 
   async healthcheck(): Promise<IntegrationStatus> {

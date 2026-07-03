@@ -14,6 +14,9 @@ model Game {
   steamAppId      String?  @unique
   externalId      String?  // platform-specific ID for PSN/Nintendo
   playtimeMinutes Int      @default(0)
+  recentPlaytimeMinutes Int?
+  recentPlaytimeSource String?
+  recentPlaytimeUpdatedAt DateTime?
   userRating      Float?   // 0~10, step 0.5
   reviewRichText  String?  // JSON string from Tiptap
   coverUrl        String?
@@ -22,22 +25,71 @@ model Game {
   lastSyncedAt    DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  logs            GameLog[]
+  listItems       GameListItem[]
 
   @@unique([platform, externalId])
   @@index([platform])
+  @@index([status])
   @@index([userRating])
   @@index([playtimeMinutes])
+  @@index([recentPlaytimeMinutes])
+}
+
+model GameLog {
+  id        String   @id @default(cuid())
+  gameId    String
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playedAt  DateTime @default(now())
+  minutes   Int      @default(0)
+  note      String?
+  tags      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gameId])
+  @@index([playedAt])
+}
+
+model GameList {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  ranked      Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  items       GameListItem[]
+}
+
+model GameListItem {
+  id        String   @id @default(cuid())
+  listId    String
+  list      GameList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  gameId    String
+  game      Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  position  Int      @default(0)
+  note      String?
+  createdAt DateTime @default(now())
+
+  @@unique([listId, gameId])
+  @@index([listId, position])
+  @@index([gameId])
 }
 
 model PlatformAccount {
-  id        String   @id @default(cuid())
-  platform  String   @unique // steam | nintendo | playstation
-  accountId String
-  apiKey    String?
-  syncStatus String  @default("idle") // idle | syncing | error
-  lastSyncAt DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id               String    @id @default(cuid())
+  platform         String    @unique // steam | nintendo | playstation
+  accountId        String
+  apiKey           String?
+  credentialJson   String?
+  credentialStatus String    @default("unknown") // unknown | valid | invalid | needs_refresh
+  syncStatus       String    @default("idle") // idle | syncing | error
+  tokenExpiresAt   DateTime?
+  lastCheckedAt    DateTime?
+  lastError        String?
+  lastSyncAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model SyncJob {

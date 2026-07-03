@@ -37,6 +37,7 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+!.env.docker.example
 
 # vercel
 .vercel
@@ -51,3 +52,5 @@ next-env.d.ts
 # database
 *.db
 *.db-journal
+*.db.backup-*
+/data/

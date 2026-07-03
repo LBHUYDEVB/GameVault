@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { normalizeGameStatus } from "@/lib/gameStatus";
 import type { Prisma } from "@/generated/prisma/client";
 
 type SortField = "userRating" | "playtimeMinutes";
@@ -36,7 +37,18 @@ export async function listGames(opts: ListOptions = {}) {
 }
 
 export async function getGame(id: string) {
-  return prisma.game.findUnique({ where: { id } });
+  return prisma.game.findUnique({
+    where: { id },
+    include: {
+      logs: {
+        orderBy: [{ playedAt: "desc" }, { createdAt: "desc" }],
+      },
+      listItems: {
+        orderBy: { position: "asc" },
+        include: { list: true },
+      },
+    },
+  });
 }
 
 export async function upsertFromSync(data: {
@@ -45,9 +57,18 @@ export async function upsertFromSync(data: {
   title: string;
   platform: string;
   playtimeMinutes: number;
+  recentPlaytimeMinutes?: number | null;
+  recentPlaytimeSource?: string | null;
   coverUrl: string | null;
 }) {
   const now = new Date();
+  const recentPatch = data.recentPlaytimeMinutes === undefined
+    ? {}
+    : {
+        recentPlaytimeMinutes: data.recentPlaytimeMinutes,
+        recentPlaytimeSource: data.recentPlaytimeSource ?? null,
+        recentPlaytimeUpdatedAt: now,
+      };
 
   if (data.platform === "steam" && data.steamAppId) {
     return prisma.game.upsert({
@@ -55,10 +76,11 @@ export async function upsertFromSync(data: {
       update: {
         title: data.title,
         playtimeMinutes: data.playtimeMinutes,
+        ...recentPatch,
         coverUrl: data.coverUrl,
         lastSyncedAt: now,
       },
-      create: { ...data, lastSyncedAt: now },
+      create: { ...data, ...recentPatch, lastSyncedAt: now },
     });
   }
 
@@ -73,10 +95,11 @@ export async function upsertFromSync(data: {
       update: {
         title: data.title,
         playtimeMinutes: data.playtimeMinutes,
+        ...recentPatch,
         coverUrl: data.coverUrl,
         lastSyncedAt: now,
       },
-      create: { ...data, lastSyncedAt: now },
+      create: { ...data, ...recentPatch, lastSyncedAt: now },
     });
   }
 
@@ -85,9 +108,16 @@ export async function upsertFromSync(data: {
 
 export async function updateGameReview(
   id: string,
-  data: { userRating?: number | null; reviewRichText?: string | null }
+  data: { userRating?: number | null; reviewRichText?: string | null; status?: string | null }
 ) {
-  return prisma.game.update({ where: { id }, data });
+  return prisma.game.update({
+    where: { id },
+    data: {
+      ...(data.userRating !== undefined ? { userRating: data.userRating } : {}),
+      ...(data.reviewRichText !== undefined ? { reviewRichText: data.reviewRichText } : {}),
+      ...(data.status !== undefined ? { status: normalizeGameStatus(data.status) } : {}),
+    },
+  });
 }
 
 export async function createManualGame(data: {
@@ -96,8 +126,14 @@ export async function createManualGame(data: {
   playtimeMinutes?: number;
   userRating?: number;
   coverUrl?: string;
+  status?: string;
 }) {
-  return prisma.game.create({ data });
+  return prisma.game.create({
+    data: {
+      ...data,
+      status: normalizeGameStatus(data.status),
+    },
+  });
 }
 
 export async function deleteGame(id: string) {

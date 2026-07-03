@@ -1,72 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { PlayStationClient } from "@/lib/integrations/playstation/playstationClient";
-import { upsertFromSync } from "@/lib/repositories/gameRepository";
+import { syncPlatform } from "@/lib/integrations/syncService";
 
 export async function POST() {
-  const account = await prisma.platformAccount.findUnique({ where: { platform: "playstation" } });
-  const npsso = account?.apiKey;
-
-  if (!npsso) {
-    return NextResponse.json(
-      { error: "PlayStation NPSSO token 未配置。请在「平台接入」页面填入。" },
-      { status: 400 }
-    );
-  }
-
-  const job = await prisma.syncJob.create({ data: { platform: "playstation" } });
-
-  try {
-    if (account) {
-      await prisma.platformAccount.update({ where: { platform: "playstation" }, data: { syncStatus: "syncing" } });
-    }
-
-    const client = new PlayStationClient();
-    const externalGames = await client.fetchOwnedGames("me", npsso);
-
-    let synced = 0;
-    let updated = 0;
-
-    for (const ext of externalGames) {
-      const existing = await prisma.game.findFirst({
-        where: { platform: "playstation", externalId: ext.externalId },
-      });
-
-      await upsertFromSync({
-        externalId: ext.externalId,
-        title: ext.title,
-        platform: "playstation",
-        playtimeMinutes: ext.playtimeMinutes,
-        coverUrl: ext.coverUrl ?? null,
-      });
-
-      if (existing) updated++;
-      else synced++;
-    }
-
-    await prisma.syncJob.update({
-      where: { id: job.id },
-      data: { status: "success", syncedCount: synced, updatedCount: updated, finishedAt: new Date() },
-    });
-
-    await prisma.platformAccount.update({
-      where: { platform: "playstation" },
-      data: { syncStatus: "idle", lastSyncAt: new Date() },
-    });
-
-    return NextResponse.json({ jobId: job.id, syncedCount: synced, updatedCount: updated, failedCount: 0 });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-
-    await prisma.syncJob.update({
-      where: { id: job.id },
-      data: { status: "failed", message: msg, finishedAt: new Date() },
-    });
-
-    if (account) {
-      await prisma.platformAccount.update({ where: { platform: "playstation" }, data: { syncStatus: "error" } });
-    }
-
-    return NextResponse.json({ error: msg }, { status: 500 });
-  }
+  const result = await syncPlatform("playstation");
+  if (!result.ok) return NextResponse.json({ error: result.message, ...result }, { status: 500 });
+  return NextResponse.json(result);
 }

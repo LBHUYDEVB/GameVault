@@ -4,46 +4,71 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/dashboard", label: "总览", icon: "◈" },
-  { href: "/admin/games", label: "管理游戏", icon: "⚙" },
-  { href: "/settings/integrations", label: "平台接入", icon: "⟁" },
+  { href: "/dashboard", label: "总览", short: "OV" },
+  { href: "/admin/games", label: "管理", short: "MG" },
+  { href: "/settings/integrations", label: "同步", short: "SC" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 shrink-0 border-r border-border bg-[var(--bg-secondary)] flex flex-col">
-      <div className="px-5 py-6 border-b border-border">
-        <h1 className="text-lg font-bold tracking-wider neon-text font-mono">
-          GAME<span className="text-neon-magenta">TRACKER</span>
-        </h1>
-        <p className="text-xs text-text-secondary mt-1 font-mono tracking-wide">Personal Journey Log</p>
-      </div>
+    <>
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-border bg-background/85 px-4 py-3 backdrop-blur-xl md:hidden">
+        <div className="flex items-center">
+          <Link href="/dashboard" className="font-mono text-sm font-bold tracking-[0.18em] text-foreground">
+            GAME TRACKER
+          </Link>
+        </div>
+      </header>
 
-      <nav className="flex-1 py-4 space-y-1 px-3">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 shrink-0 border-r border-border bg-[var(--bg-secondary)]/92 backdrop-blur-xl md:flex md:flex-col">
+        <div className="px-6 py-7 border-b border-border">
+          <Link href="/dashboard" className="block text-lg font-bold tracking-[0.18em] neon-text font-mono">
+            GAME TRACKER
+          </Link>
+        </div>
+
+        <nav className="flex-1 space-y-2 px-3 py-5">
+          {navItems.map((item) => {
+            const active = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`group flex items-center gap-3 rounded-md border px-3 py-3 text-sm font-medium transition-all duration-200
+                  ${active
+                    ? "border-neon-cyan/35 bg-neon-cyan/10 text-neon-cyan shadow-[var(--glow-cyan)]"
+                    : "border-transparent text-text-secondary hover:border-border hover:bg-white/[0.03] hover:text-foreground"
+                  }`}
+              >
+                <span className="grid h-8 w-8 place-items-center rounded border border-border bg-black/20 font-mono text-[10px] tracking-widest group-hover:border-neon-cyan/40">
+                  {item.short}
+                </span>
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+      </aside>
+
+      <nav className="fixed inset-x-3 bottom-3 z-50 grid grid-cols-3 gap-2 rounded-lg border border-border bg-[var(--bg-secondary)]/92 p-2 shadow-2xl backdrop-blur-xl md:hidden">
         {navItems.map((item) => {
           const active = pathname.startsWith(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-all duration-150
-                ${active
-                  ? "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30 shadow-[var(--glow-cyan)]"
-                  : "text-text-secondary hover:text-foreground hover:bg-white/5 border border-transparent"
-                }`}
+              className={`rounded-md px-2 py-2 text-center text-xs transition-colors
+                ${active ? "bg-neon-cyan text-black" : "text-text-secondary hover:bg-white/5 hover:text-foreground"}`}
             >
-              <span className="text-base">{item.icon}</span>
-              {item.label}
+              <span className="block font-mono text-[10px] tracking-widest">{item.short}</span>
+              <span className="mt-1 block">{item.label}</span>
             </Link>
           );
         })}
       </nav>
-
-      <div className="px-5 py-4 border-t border-border">
-        <p className="text-[10px] text-text-muted font-mono tracking-widest uppercase">Local Mode</p>
-      </div>
-    </aside>
+    </>
   );
 }

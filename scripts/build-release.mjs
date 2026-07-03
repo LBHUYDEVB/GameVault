@@ -15,7 +15,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pipeline } from "node:stream/promises";
-import { createWriteStream, createReadStream } from "node:fs";
+import { createWriteStream } from "node:fs";
 import archiver from "archiver";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
